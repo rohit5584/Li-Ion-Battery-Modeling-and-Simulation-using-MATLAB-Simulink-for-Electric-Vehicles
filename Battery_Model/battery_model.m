@@ -1,64 +1,52 @@
-%% Create Battery Discharge Model using Simulink (no Simscape)
+%% Battery Model Script - battery_model.m
+% Author: Rohit Kumar Rai
+% Description: Runs the simulation of a 48V 35Ah NMC battery pack using 1RC model
 
 clc;
-bdclose all;
 clear;
+close all;
 
-% Model name
-modelName = 'simple_battery_model';
-new_system(modelName);
-open_system(modelName);
+disp(' Running Li-Ion NMC Battery Model Simulation');
 
-% Model settings
-set_param(modelName, 'Solver', 'ode45', 'StopTime', '1000');
+%% Load Parameters
+run('battery_parameters.m');
 
-%%  Block Positions
-x = 30; y = 30; dx = 120; dy = 80;
+%% Open the Simulink Model
+model_name = 'battery_sim';
+if ~bdIsLoaded(model_name)
+    open_system(model_name);
+end
 
-%% 1. Battery Voltage Source (Voc)
-add_block('simulink/Sources/Constant', [modelName '/Voc'], ...
-    'Value', '3.7', ...
-    'Position', [x y x+50 y+30]);
+%% Set Simulation Time
+sim_time = 600; % in seconds, e.g., 10 Minutes
+set_param(model_name, 'StopTime', num2str(sim_time));
 
-%% 2. Internal Resistance (Rs)
-add_block('simulink/Commonly Used Blocks/Gain', [modelName '/Rs'], ...
-    'Gain', '0.01', ...
-    'Position', [x+dx y x+dx+50 y+30]);
+%% Run the Simulation
+disp(' Starting Simulation...');
+simOut = sim(model_name);
 
-%%  3. Current Source (Load Current)
-add_block('simulink/Sources/Constant', [modelName '/I_load'], ...
-    'Value', '1.5', ...
-    'Position', [x y+dy x+50 y+dy+30]);
+disp('Simulation Complete');
 
-%%  4. MATLAB Function Block (SOC Estimation)
-add_block('simulink/User-Defined Functions/MATLAB Function', [modelName '/SOC_Estimator'], ...
-    'Position', [x+2*dx y+dy x+2*dx+100 y+dy+80]);
+%% Extract Output Data
+time = simOut.tout;
+SOC = simOut.logsout.getElement('SOC').Values.Data;
+V_terminal = simOut.logsout.getElement('V_terminal').Values.Data;
 
-set_param([modelName '/SOC_Estimator'], 'FunctionName', 'estimate_soc');
-set_param([modelName '/SOC_Estimator'], 'MaskDisplay', 'disp(''SOC'')');
+%% Plot SOC vs Time
+figure;
+plot(time/60, SOC, 'LineWidth', 2);
+xlabel('Time (minutes)');
+ylabel('State of Charge (SOC)');
+title('SOC vs Time');
+grid on;
 
-matlabFunctionCode = [
-    'function soc = estimate_soc(current)\n' ...
-    'persistent soc_val\n' ...
-    'if isempty(soc_val)\n' ...
-    '    soc_val = 1.0;\n' ...
-    'end\n' ...
-    'Q = 2.3 * 3600; % Capacity in Coulombs\n' ...
-    'dt = 1;         % Time step in sec\n' ...
-    'soc_val = soc_val - (current * dt) / Q;\n' ...
-    'soc_val = min(max(soc_val, 0), 1);\n' ...
-    'soc = soc_val;\n' ...
-];
-set_param([modelName '/SOC_Estimator'], 'MATLABFunction', matlabFunctionCode);
+%% Plot Terminal Voltage vs Time
+figure;
+plot(time/60, V_terminal, 'LineWidth', 2);
+xlabel('Time (minutes)');
+ylabel('Terminal Voltage (V)');
+title('Terminal Voltage vs Time');
+grid on;
 
-%%  5. Scope
-add_block('simulink/Sinks/Scope', [modelName '/Scope'], ...
-    'Position', [x+3*dx y+dy x+3*dx+80 y+dy+50]);
+disp('Plots generated successfully.');
 
-%%  Connections
-add_line(modelName, 'I_load/1', 'SOC_Estimator/1');
-add_line(modelName, 'SOC_Estimator/1', 'Scope/1');
-
-%%  Save and run
-save_system(modelName);
-disp(" Model created: simple_battery_model.slx");

@@ -1,48 +1,66 @@
-%% SOC Estimation using Coulomb Counting Method
-% This script simulates State of Charge (SOC) based on discharge current.
+%% battery_soc_estimation.m
+% Script to simulate SOC estimation of a 48V / 35Ah Li-Ion NMC Battery Pack
+% Author: Rohit Kumar Rai
 
-clc;
-clear;
+clc; clear; close all;
 
-%%  Load Battery Parameters
+%% Load Battery Parameters
+battery_parameters;  % Load all battery and model parameters
 
-battery_parameters;  % Call the parameter file to load variables
+%% Simulation Time Settings
+t_end = 600;                          % Total simulation time (10 minutes)
+time = 0:sample_time:t_end;           % Time vector
+n_steps = length(time);
 
-%%  Simulation Setup
+%% Define Load Current Profile
+% Example: Step + Pulsed load pattern in Amperes (positive for discharge)
+i_load = zeros(1, n_steps);
+i_load(time >= 100 & time < 600)   = 10;   % 10 A discharge
+i_load(time >= 600 & time < 1200)  = 20;   % 20 A discharge
+i_load(time >= 1200 & time < 1800) = 15;   % 15 A discharge
+i_load(time >= 1800 & time < 2400) = 5;    % 5 A discharge
+i_load(time >= 3000 & time < 3300) = -10;  % 10 A charging pulse
 
-dt = 1;                             % Time step in seconds
-time = 0:dt:t_sim;                  % Time vector
-num_steps = length(time);
+%% Initialize SOC Array
+SOC = zeros(1, n_steps);
+SOC(1) = SOC_initial;
 
-I_discharge = I_load * ones(1, num_steps);  % Constant load current (can be replaced with real data)
-
-%%  Initialize SOC
-
-SOC = zeros(1, num_steps);
-SOC(1) = initial_SOC;              % Start from 100% or defined value
-
-%%  Coulomb Counting Loop
-
-for t = 2:num_steps
-    delta_SOC = -(I_discharge(t) * dt) / Q_capacity;  % Discharged fraction
-    SOC(t) = SOC(t-1) + delta_SOC;
+%% SOC Estimation Using Coulomb Counting
+for k = 2:n_steps
+    % Delta time
+    dt = time(k) - time(k-1);
     
-    % Limit SOC between 0 and 1
-    if SOC(t) < 0
-        SOC(t) = 0;
-    elseif SOC(t) > 1
-        SOC(t) = 1;
-    end
+    % Coulomb counting: SOC(t) = SOC(t-1) - (i/Q) * dt
+    SOC(k) = SOC(k-1) - (i_load(k) * dt) / Q_pack_coulombs;
+
+    % Limit SOC between 0 and 1 (as per Saturation block)
+    SOC(k) = max(0, min(1, SOC(k)));
 end
 
-%%  Plot SOC over Time
+%% Calculate Terminal Voltage (optional – simplified estimate)
+Voc_interp = interp1(SOC_lookup, OCV_pack, SOC, 'linear', 'extrap');
+V_terminal = Voc_interp - Rs_pack * i_load;
+
+%% Plot Results
 
 figure;
-plot(time, SOC * 100, 'LineWidth', 2);
+subplot(3,1,1);
+plot(time, i_load, 'LineWidth', 1.5); grid on;
 xlabel('Time (s)');
-ylabel('State of Charge (%)');
-title('SOC Estimation using Coulomb Counting');
-grid on;
-saveas(gcf, 'Results/soc_plot.png');
+ylabel('Current (A)');
+title('Load Current Profile');
 
-disp(" SOC estimation completed and graph saved.");
+subplot(3,1,2);
+plot(time, SOC * 100, 'b', 'LineWidth', 1.5); grid on;
+xlabel('Time (s)');
+ylabel('SOC (%)');
+title('State of Charge (SOC)');
+
+subplot(3,1,3);
+plot(time, V_terminal, 'r', 'LineWidth', 1.5); grid on;
+xlabel('Time (s)');
+ylabel('Terminal Voltage (V)');
+title('Estimated Terminal Voltage');
+
+sgtitle('Battery SOC Estimation using Coulomb Counting');
+
