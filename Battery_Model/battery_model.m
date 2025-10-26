@@ -22,9 +22,9 @@ sim_time = 600; % in seconds, e.g., 10 Minutes
 set_param(model_name, 'StopTime', num2str(sim_time));
 
 %% Run the Simulation
-disp(' Starting Simulation...');
+model_name = 'battery_sim';
+disp('Starting Simulation...');
 simOut = sim(model_name);
-
 disp('Simulation Complete');
 
 %% Extract Output Data

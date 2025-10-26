@@ -1,0 +1,190 @@
+%% create_battery_sim.m
+% Automatic Simulink Model Generator for Battery Simulation
+% Author: Rohit Kumar Rai
+% Description: Creates battery_sim.slx model to match battery_model.m requirements
+
+clc;
+clear;
+
+disp('========================================');
+disp('Creating Battery Simulation Model...');
+disp('========================================');
+
+%% Load Parameters First
+run('battery_parameters.m');
+
+%% Model Configuration
+model_name = 'battery_sim';
+
+% Close model if already open
+if bdIsLoaded(model_name)
+    close_system(model_name, 0);
+end
+
+% Delete existing model file if exists
+if exist([model_name '.slx'], 'file')
+    delete([model_name '.slx']);
+    disp(['Deleted existing ' model_name '.slx']);
+end
+
+%% Create New Model
+new_system(model_name);
+open_system(model_name);
+
+%% Add Blocks with Positions [left top right bottom]
+
+% 1. Load Current Input (Constant block)
+add_block('simulink/Sources/Constant', [model_name '/Load_Current'], ...
+    'Position', [50 100 100 130], ...
+    'Value', 'load_current');
+
+% 2. Current to SOC Rate Conversion
+add_block('simulink/Math Operations/Gain', [model_name '/Gain_I_to_SOC'], ...
+    'Position', [150 95 200 135], ...
+    'Gain', '-1/(Q_pack*3600)', ...
+    'Multiplication', 'Element-wise(K.*u)');
+
+% 3. SOC Integrator
+add_block('simulink/Continuous/Integrator', [model_name '/Integrator_SOC'], ...
+    'Position', [250 95 300 135], ...
+    'InitialCondition', 'SOC_initial');
+
+% 4. SOC Saturation (0 to 1)
+add_block('simulink/Discontinuities/Saturation', [model_name '/Saturation_SOC'], ...
+    'Position', [350 95 400 135], ...
+    'UpperLimit', '1', ...
+    'LowerLimit', '0');
+
+% 5. OCV Lookup Table
+add_block('simulink/Lookup Tables/1-D Lookup Table', [model_name '/Lookup_OCV'], ...
+    'Position', [450 85 530 145], ...
+    'Table', 'OCV_pack', ...
+    'BreakpointsForDimension1', 'SOC_lookup', ...
+    'InputSampling', 'Continuous');
+
+% 6. Series Resistance Drop (Rs * I)
+add_block('simulink/Math Operations/Gain', [model_name '/Gain_Rs'], ...
+    'Position', [150 200 200 240], ...
+    'Gain', 'Rs_pack', ...
+    'Multiplication', 'Element-wise(K.*u)');
+
+% 7. RC Network - Transfer Function (1RC Model)
+add_block('simulink/Continuous/Transfer Fcn', [model_name '/TransferFcn_RC'], ...
+    'Position', [250 295 350 345], ...
+    'Numerator', '[R1_pack]', ...
+    'Denominator', '[R1_pack*C1_pack 1]');
+
+% 8. Sum Block for Terminal Voltage (V_oc - V_Rs - V_RC)
+add_block('simulink/Math Operations/Sum', [model_name '/Sum_Vterminal'], ...
+    'Position', [600 190 630 270], ...
+    'Inputs', '+--', ...
+    'IconShape', 'rectangular');
+
+%% Add Connection Lines
+
+% Load Current to SOC Rate Gain
+add_line(model_name, 'Load_Current/1', 'Gain_I_to_SOC/1', 'autorouting', 'on');
+
+% SOC Rate to Integrator
+add_line(model_name, 'Gain_I_to_SOC/1', 'Integrator_SOC/1', 'autorouting', 'on');
+
+% Integrator to Saturation
+add_line(model_name, 'Integrator_SOC/1', 'Saturation_SOC/1', 'autorouting', 'on');
+
+% Saturation to OCV Lookup
+add_line(model_name, 'Saturation_SOC/1', 'Lookup_OCV/1', 'autorouting', 'on');
+
+% Load Current to Rs Drop
+add_line(model_name, 'Load_Current/1', 'Gain_Rs/1', 'autorouting', 'on');
+
+% Load Current to RC Network
+add_line(model_name, 'Load_Current/1', 'TransferFcn_RC/1', 'autorouting', 'on');
+
+% OCV to Terminal Voltage Sum (port 1: +)
+add_line(model_name, 'Lookup_OCV/1', 'Sum_Vterminal/1', 'autorouting', 'on');
+
+% Rs Drop to Terminal Voltage Sum (port 2: -)
+add_line(model_name, 'Gain_Rs/1', 'Sum_Vterminal/2', 'autorouting', 'on');
+
+% RC Network to Terminal Voltage Sum (port 3: -)
+add_line(model_name, 'TransferFcn_RC/1', 'Sum_Vterminal/3', 'autorouting', 'on');
+
+%% Add Signal Labels for Logging (matching battery_model.m requirements)
+
+% Get port handles for signal labeling
+soc_line = get_param([model_name '/Saturation_SOC'], 'PortHandles');
+vterm_line = get_param([model_name '/Sum_Vterminal'], 'PortHandles');
+
+% Add signal labels
+soc_line_handle = add_line(model_name, soc_line.Outport(1), soc_line.Outport(1), 'autorouting', 'on');
+set_param(soc_line_handle, 'Name', 'SOC');
+
+vterm_line_handle = add_line(model_name, vterm_line.Outport(1), vterm_line.Outport(1), 'autorouting', 'on');
+set_param(vterm_line_handle, 'Name', 'V_terminal');
+
+%% Configure Model Settings (matching battery_model.m expectations)
+
+% Solver Configuration
+set_param(model_name, 'SolverType', 'Variable-step');
+set_param(model_name, 'Solver', 'ode45');
+set_param(model_name, 'StopTime', '600');
+set_param(model_name, 'StartTime', '0');
+
+% Data Import/Export - Configure for logsout
+set_param(model_name, 'SaveOutput', 'on');
+set_param(model_name, 'OutputSaveName', 'yout');
+set_param(model_name, 'SaveTime', 'on');
+set_param(model_name, 'TimeSaveName', 'tout');
+
+% Signal Logging Configuration (CRITICAL for battery_model.m)
+set_param(model_name, 'SignalLogging', 'on');
+set_param(model_name, 'SignalLoggingName', 'logsout');
+set_param(model_name, 'DatasetSignalFormat', 'timetable');
+
+%% Enable Signal Logging on Named Signals
+% This ensures logsout.getElement('SOC') and logsout.getElement('V_terminal') work
+
+% Configure logging using signal names
+modelH = get_param(model_name, 'Handle');
+logSignals = Simulink.sdi.getAllSignals(modelH);
+
+% Find and configure SOC signal
+for i = 1:length(logSignals)
+    sigName = logSignals(i).Name;
+    if strcmp(sigName, 'SOC')
+        logSignals(i).LoggingInfo.LoggingName = 'SOC';
+        logSignals(i).LoggingInfo.DataLogging = true;
+    elseif strcmp(sigName, 'V_terminal')
+        logSignals(i).LoggingInfo.LoggingName = 'V_terminal';
+        logSignals(i).LoggingInfo.DataLogging = true;
+    end
+end
+
+%% Arrange Layout
+Simulink.BlockDiagram.arrangeSystem(model_name);
+
+%% Save Model
+save_system(model_name);
+
+disp('========================================');
+disp(['✓ Model ' model_name '.slx created successfully!']);
+disp('========================================');
+disp(' ');
+disp('Model Components:');
+disp('  • Load Current: Constant block (load_current)');
+disp('  • SOC Estimation: Coulomb counting method');
+disp('  • OCV Model: 1-D lookup table (SOC vs OCV)');
+disp('  • 1RC Model: Rs + RC transfer function');
+disp('  • Output Signals: SOC, V_terminal (logged to logsout)');
+disp(' ');
+disp('Parameters from battery_parameters.m:');
+disp(['  • Pack Voltage: ' num2str(V_pack_nominal) ' V']);
+disp(['  • Pack Capacity: ' num2str(Q_pack) ' Ah']);
+disp(['  • Initial SOC: ' num2str(SOC_initial*100) ' %']);
+disp(' ');
+disp('Next Step:');
+disp('  Run: battery_model.m');
+disp('========================================');
+
+%% Display Model
+open_system(model_name);
