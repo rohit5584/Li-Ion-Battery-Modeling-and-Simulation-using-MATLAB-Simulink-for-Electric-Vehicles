@@ -183,7 +183,7 @@ OCV_pack   = OCV_cell * N_series;  % Scaled for 13 series cells
 ---
 
 ##  Simulation Results
-![Battery SOC Estimation using Coulomb Counting - 48V 35Ah NMC Pack](Results/Combined graph of Load current,SOC,Terminal voltage vs Time graph.png)
+![Battery SOC Estimation using Coulomb Counting - 48V 35Ah NMC Pack](Results/Combined%20graph%20of%20Load%20current%2CSOC%2CTerminal%20voltage%20vs%20Time%20graph.png)
 ### Test Scenario
 - **Initial SOC**: 100% (Fully Charged)
 - **Load Profile**: 
@@ -191,7 +191,7 @@ OCV_pack   = OCV_cell * N_series;  % Scaled for 13 series cells
   - 100-600s: 10A (Constant Discharge)
 - **Duration**: 10 minutes (600 seconds)
 - **Discharge Period**: 500 seconds at 10A
-![Load Current vs Time](Results/Load current vs time Plot.png)
+![Load Current vs Time](Results/Load%20current%20vs%20time%20Plot.png)
 
 ### 1. SOC vs Time (Coulomb Counting)
 - **Initial SOC**: 100%
@@ -200,7 +200,7 @@ OCV_pack   = OCV_cell * N_series;  % Scaled for 13 series cells
 - **SOC Loss**: 4% (mathematically verified)
 - **Behavior**: Smooth linear decline during discharge, flat during idle period ✓
 
-![SOC vs Time](Results/SOC vs Time plot.png)
+![SOC vs Time](Results/SOC%20vs%20Time%20plot.png)
 
 **Mathematical Verification:**
 ```
@@ -216,7 +216,7 @@ Final SOC = 100% - 4% = 96% ✓
 - **Voltage Drop**: Minimal due to low internal resistance (Rs = 0.0177Ω)
 - **Behavior**: Gradual decrease following SOC decline ✓
 
-![Terminal Voltage vs Time](Results/Terminal voltage vs time plot.png)
+![Terminal Voltage vs Time](Results/Battery%20SOC%20and%20terminal%20Voltage%20during%20discharge%20with%20time.png)
 
 **Voltage Drop Components:**
 - **Instant Drop** (Rs): 0.0177Ω × 10A = 0.177V
@@ -231,7 +231,7 @@ Final SOC = 100% - 4% = 96% ✓
 - **Time Range**: 0-10 minutes
 - **Observation**: Voltage drop mirrors SOC decline
 
-![SOC & Terminal Voltage vs Time](Results/Battery SOC and terminal Voltage during discharge with time.png)
+![Battery SOC and Terminal Voltage](Results/Battery%20SOC%20and%20terminal%20Voltage%20during%20discharge%20with%20time.png)
 
 ### 4. Key Performance Metrics
 
